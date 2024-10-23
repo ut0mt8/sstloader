@@ -280,19 +280,19 @@ func main() {
 				for _, c := range r.Cells {
 					// Internal type
 					switch c.TypeSize {
-					case 0:
+					case sstable.TextSize:
 						if string(c.Value) == "" {
 							values = append(values, &gocql.UnsetValue)
 						} else {
 							values = append(values, string(c.Value))
 						}
-					case 4:
+					case sstable.Int32Size:
 						if sstable.GetFlag(c.Flags, sstable.HAS_EMPTY_VALUE) {
 							values = append(values, &gocql.UnsetValue)
 						} else {
 							values = append(values, sstable.Int32(c.Value))
 						}
-					case 8:
+					case sstable.DoubleSize:
 						if sstable.GetFlag(c.Flags, sstable.HAS_EMPTY_VALUE) {
 							values = append(values, &gocql.UnsetValue)
 						} else {

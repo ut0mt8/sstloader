@@ -62,11 +62,11 @@ func (c *Column) GetTypeSize(r binstruct.Reader) (uint64, error) {
 func GetTypeSize(t string) uint64 {
 	switch t {
 	case "org.apache.cassandra.db.marshal.UTF8Type":
-		return 0
+		return TextSize
 	case "org.apache.cassandra.db.marshal.Int32Type":
-		return 4
+		return Int32Size
 	case "org.apache.cassandra.db.marshal.DoubleType":
-		return 8
+		return DoubleSize
 	}
 	return 0
 }
