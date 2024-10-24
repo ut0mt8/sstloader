@@ -2,9 +2,6 @@ package sstable
 
 import "io"
 
-// global for simplicty and perf
-var SchemaType []uint64
-
 // row flags
 const (
 	END_OF_PARTITION     byte = 0x01
@@ -99,12 +96,12 @@ func (row *Row) Read(r io.Reader) {
 	}
 
 	// cells
-	row.Cells = make([]Cell, len(SchemaType))
+	row.Cells = make([]Cell, len(Schema))
 
 	// read number of cells according to the schema
-	for i := 0; i < len(SchemaType); i++ {
+	for i := 0; i < len(Schema); i++ {
 		Cell := Cell{
-			TypeSize: SchemaType[i],
+			TypeSize: Schema[i].Size,
 		}
 		Cell.Read(r)
 		row.Cells[i] = Cell

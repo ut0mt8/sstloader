@@ -2,12 +2,9 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"github.com/ghostiam/binstruct"
 	"github.com/gocql/gocql"
 	"github.com/jessevdk/go-flags"
-	"github.com/pierrec/lz4"
 	"go.uber.org/ratelimit"
 	"os"
 	"strings"
@@ -52,6 +49,10 @@ func main() {
 		}
 	}
 
+	statisticsFile := strings.Replace(opts.DataFile, "Data", "Statistics", 1)
+	compressionFile := strings.Replace(opts.DataFile, "Data", "CompressionInfo", 1)
+
+	// cassandra init
 	var session *gocql.Session
 
 	cluster := gocql.NewCluster(opts.Seeds)
@@ -80,37 +81,16 @@ func main() {
 	}
 
 	// statistics file
-	statfile, err := os.Open(strings.Replace(opts.DataFile, "Data", "Statistics", 1))
+	err := sstable.ReadStatistics(statisticsFile)
 	if err != nil {
-		fmt.Printf("(error) statistics-file: %v\n", err)
+		fmt.Printf("(error) read statistics: %v\n", err)
 		os.Exit(1)
-	}
-
-	// decode statistics info to struct
-	stats := sstable.StatisticsInfo{}
-	decoder := binstruct.NewDecoder(statfile, binary.BigEndian)
-	err = decoder.Decode(&stats)
-	if err != nil {
-		fmt.Printf("(error) decode statistics-file: %v\n", err)
-		os.Exit(1)
-	}
-	statfile.Close()
-
-	// display some structure info
-	if opts.Debug {
-		fmt.Printf("(debug) partition-key %v\n", stats.Serialization.PartitionKeyTypeValue)
-
-		for _, t := range stats.Serialization.ClusteringKey {
-			fmt.Printf("(debug) clustering-key %s\n", t.Type)
-		}
-		for i, t := range stats.Serialization.RegularColumns {
-			fmt.Printf("(debug) columns[%d] %s(%s)\n", i, t.Name, t.Type)
-		}
 	}
 
 	// construct request
 
-	// get partition and clustering key TODO only text supported
+	// get partition and clustering key
+	// TODO only text supported
 	var (
 		partition     string
 		clustering    string
@@ -141,11 +121,9 @@ func main() {
 		compoundPK = true
 	}
 
-	// get schema info from stats file
-	sstable.SchemaType = make([]uint64, stats.Serialization.RegularColumnsNumber)
-	for i := 0; i < int(stats.Serialization.RegularColumnsNumber); i++ {
-		sstable.SchemaType[i] = stats.Serialization.RegularColumns[i].TypeSize
-		regularColums = regularColums + stats.Serialization.RegularColumns[i].Name + ","
+	// get columns from schemas
+	for i := 0; i < len(sstable.Schema); i++ {
+		regularColums = regularColums + sstable.Schema[i].Name + ","
 		columsFill = columsFill + "?,"
 	}
 
@@ -159,67 +137,12 @@ func main() {
 		fmt.Printf("(debug) query: %s \n", req)
 	}
 
-	// data file
-	dataf, err := os.Open(opts.DataFile)
-	if err != nil {
-		fmt.Printf("(error) data-file: %v\n", err)
-		os.Exit(1)
-	}
-	defer dataf.Close()
-
-	datafi, err := dataf.Stat()
-	if err != nil {
-		fmt.Printf("(error) statistics-file: %v\n", err)
-		os.Exit(1)
-	}
-
-	// compression file
-	comp, err := os.Open(strings.Replace(opts.DataFile, "Data", "CompressionInfo", 1))
-	if err != nil {
-		fmt.Printf("(error) compression-file: %v\n", err)
-		os.Exit(1)
-	}
-
-	// decode compression info to struct
-	info := sstable.CompressionInfo{}
-	info.FileSize = datafi.Size()
-	decoder = binstruct.NewDecoder(comp, binary.BigEndian)
-	err = decoder.Decode(&info)
-	if err != nil {
-		fmt.Printf("(error) decode compression-file: %v\n", err)
-		os.Exit(1)
-	}
-	comp.Close()
-
-	if opts.Debug {
-		fmt.Printf("(debug) compressor-name: %s\n", info.CompressorName.Value)
-	}
-
-	// do not count uncompress
-	start := time.Now()
-
-	// uncompress data chunk by chunk
+	// read datafile and uncompress it
 	var data []byte
 
-	for i := 0; i < int(info.ChunkCount); i++ {
-
-		chunk := sstable.DataChunk{}
-		chunk.CompressedLength = info.ChunkSizes[i]
-		decoder := binstruct.NewDecoder(dataf, binary.BigEndian)
-		err = decoder.Decode(&chunk)
-		if err != nil {
-			fmt.Printf("(error) decode data-chunk: %v\n", err)
-			os.Exit(1)
-		}
-
-		UncompressedBytes := make([]byte, chunk.UncompressedLength)
-		_, err := lz4.UncompressBlock(chunk.CompressedBytes, UncompressedBytes)
-		if err != nil {
-			fmt.Printf("(error) uncompress lz4 data-chunk: %v\n", err)
-			os.Exit(1)
-		}
-
-		data = append(data, UncompressedBytes...)
+	err = sstable.ReadData(opts.DataFile, compressionFile, &data)
+	if err != nil {
+		fmt.Printf("(error) read data: %v\n", err)
 	}
 
 	// insert workers
@@ -245,8 +168,11 @@ func main() {
 		}()
 	}
 
+	// do not count uncompress
+	start := time.Now()
+
 	// main reading worker
-	count := 0
+	queriesCount := 0
 	rl := ratelimit.New(opts.Limit)
 
 	wg.Add(1)
@@ -259,6 +185,7 @@ func main() {
 			}
 		}()
 
+		// readPartition(data, ch, rl)
 		reader := bytes.NewReader(data)
 
 		//main read loop
@@ -304,10 +231,10 @@ func main() {
 				// send to cql workers
 				rl.Take()
 				ch <- values
-				count++
+				queriesCount++
 
-				if opts.Debug && count%opts.Sampling == 0 {
-					fmt.Printf("(debug) inserted %d (%d)\n", count, len(ch))
+				if opts.Debug && queriesCount%opts.Sampling == 0 {
+					fmt.Printf("(debug) inserted %d (%d)\n", queriesCount, len(ch))
 				}
 			}
 		}
@@ -315,6 +242,6 @@ func main() {
 
 	wg.Wait()
 	elapsed := time.Since(start)
-	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d error(s)\n", count, elapsed, count/int(elapsed.Seconds()), errors.Load())
+	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d error(s)\n", queriesCount, elapsed, queriesCount/int(elapsed.Seconds()), errors.Load())
 
 }
