@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/gocql/gocql"
 	"github.com/jessevdk/go-flags"
-	"go.uber.org/ratelimit"
 	"os"
 	"strings"
 	"sync"
@@ -25,9 +23,9 @@ func main() {
 		DC       string `short:"r" long:"datacenter" description:"cassandra datacenter" required:"true"`
 		Username string `short:"u" long:"username" description:"cassandra username" default:"cassandra"`
 		Password string `short:"p" long:"password" description:"cassandra password" default:"cassandra"`
-		Conns    int    `short:"c" long:"connections" description:"number of connections by host" default:"20"`
 		Workers  int    `short:"w" long:"workers" description:"workers numbers" default:"100"`
 		InFlight int    `short:"i" long:"maxinflight" description:"maximum in flight requests" default:"200"`
+		Conns    int    `long:"connections" description:"number of connections by host" default:"20"`
 		Dry      bool   `long:"dryrun" description:"only decode sstable"`
 		CSV      bool   `long:"printcsv" description:"print CSV to stdout"`
 		Limit    int    `long:"ratelimit" description:"rate limit insert per second" default:"10000"`
@@ -49,12 +47,19 @@ func main() {
 		}
 	}
 
-	statisticsFile := strings.Replace(opts.DataFile, "Data", "Statistics", 1)
-	compressionFile := strings.Replace(opts.DataFile, "Data", "CompressionInfo", 1)
+	// sstable init
+	sst := sstable.New()
+	sst.DataFile = opts.DataFile
+	sst.StatisticsFile = strings.Replace(opts.DataFile, "Data", "Statistics", 1)
+	sst.CompressionFile = strings.Replace(opts.DataFile, "Data", "CompressionInfo", 1)
+	sst.Limit = opts.Limit
+	sst.Sampling = opts.Sampling
+	if opts.Debug {
+		sst.Debug = true
+	}
 
 	// cassandra init
-	var session *gocql.Session
-
+	var  session *gocql.Session
 	cluster := gocql.NewCluster(opts.Seeds)
 	cluster.Keyspace = opts.KS
 	cluster.Consistency = gocql.Any // we don't want to wait
@@ -80,17 +85,14 @@ func main() {
 		defer session.Close()
 	}
 
-	// statistics file
-	err := sstable.ReadStatistics(statisticsFile)
+	// read statistics file
+	err := sst.ReadStatistics()
 	if err != nil {
 		fmt.Printf("(error) read statistics: %v\n", err)
 		os.Exit(1)
 	}
 
-	// construct request
-
-	// get partition and clustering key
-	// TODO only text supported
+	// construct insert query
 	var (
 		partition     string
 		clustering    string
@@ -99,9 +101,10 @@ func main() {
 		regularColums string
 		columsFill    string
 		pkNumber      int
-		compoundPK    bool
 	)
 
+	// get partition and clustering key
+	// TODO only text supported
 	req := "SELECT column_name, kind FROM system_schema.columns where keyspace_name = '%s' and table_name = '%s'"
 	iter := session.Query(fmt.Sprintf(req, opts.KS, opts.Table)).Consistency(gocql.LocalQuorum).Iter()
 
@@ -118,10 +121,10 @@ func main() {
 
 	// FIXME find better to pass it to partitionReader
 	if pkNumber > 1 {
-		compoundPK = true
+		sst.Compound = true
 	}
 
-	// get columns from schemas
+	// get columns from schemas (sst side)
 	for i := 0; i < len(sstable.Schema); i++ {
 		regularColums = regularColums + sstable.Schema[i].Name + ","
 		columsFill = columsFill + "?,"
@@ -132,15 +135,12 @@ func main() {
 
 	// insert reqyest
 	req = "INSERT INTO " + opts.KS + "." + opts.Table + " (" + partition + clustering + regularColums + ") VALUES (" + columsFill + ") "
-
 	if opts.Debug {
 		fmt.Printf("(debug) query: %s \n", req)
 	}
 
-	// read datafile and uncompress it
-	var data []byte
-
-	err = sstable.ReadData(opts.DataFile, compressionFile, &data)
+	// read datafile and uncompress it in memory
+	err = sst.ReadData()
 	if err != nil {
 		fmt.Printf("(error) read data: %v\n", err)
 	}
@@ -168,13 +168,10 @@ func main() {
 		}()
 	}
 
-	// do not count uncompress
+	// main reading worker
 	start := time.Now()
 
-	// main reading worker
-	queriesCount := 0
-	rl := ratelimit.New(opts.Limit)
-
+	// wrap in go routine to handle recover
 	wg.Add(1)
 	go func() {
 
@@ -185,63 +182,12 @@ func main() {
 			}
 		}()
 
-		// readPartition(data, ch, rl)
-		reader := bytes.NewReader(data)
+		sst.ReadPartitions(ch)
 
-		//main read loop
-		for {
-			partition := sstable.Partition{}
-			partition.Read(reader, compoundPK)
-
-			var pvalues []any
-
-			for _, hk := range partition.HeaderKeys {
-				pvalues = append(pvalues, hk.Value)
-			}
-
-			for _, r := range partition.Rows {
-
-				var values []any
-				values = append(pvalues, r.ClusteringValue)
-
-				for _, c := range r.Cells {
-					// Internal type
-					switch c.TypeSize {
-					case sstable.TextSize:
-						if string(c.Value) == "" {
-							values = append(values, &gocql.UnsetValue)
-						} else {
-							values = append(values, string(c.Value))
-						}
-					case sstable.Int32Size:
-						if sstable.GetFlag(c.Flags, sstable.HAS_EMPTY_VALUE) {
-							values = append(values, &gocql.UnsetValue)
-						} else {
-							values = append(values, sstable.Int32(c.Value))
-						}
-					case sstable.DoubleSize:
-						if sstable.GetFlag(c.Flags, sstable.HAS_EMPTY_VALUE) {
-							values = append(values, &gocql.UnsetValue)
-						} else {
-							values = append(values, sstable.Float64(c.Value))
-						}
-					}
-				}
-
-				// send to cql workers
-				rl.Take()
-				ch <- values
-				queriesCount++
-
-				if opts.Debug && queriesCount%opts.Sampling == 0 {
-					fmt.Printf("(debug) inserted %d (%d)\n", queriesCount, len(ch))
-				}
-			}
-		}
 	}()
 
 	wg.Wait()
 	elapsed := time.Since(start)
-	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d error(s)\n", queriesCount, elapsed, queriesCount/int(elapsed.Seconds()), errors.Load())
+	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d error(s)\n", sst.Queries, elapsed, sst.Queries/int(elapsed.Seconds()), errors.Load())
 
 }
