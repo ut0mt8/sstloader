@@ -24,10 +24,10 @@ func main() {
 		Password string `short:"p" long:"password" description:"cassandra password" default:"cassandra"`
 		Workers  int    `short:"w" long:"workers" description:"workers numbers" default:"100"`
 		InFlight int    `short:"i" long:"maxinflight" description:"maximum in flight requests" default:"200"`
+		Limit    int    `short:"l" long:"ratelimit" description:"rate limit insert per second" default:"10000"`
 		Conns    int    `long:"connections" description:"number of connections by host" default:"20"`
 		Dry      bool   `long:"dryrun" description:"only decode sstable"`
 		CSV      bool   `long:"printcsv" description:"print CSV to stdout"`
-		Limit    int    `long:"ratelimit" description:"rate limit insert per second" default:"10000"`
 		Retries  int    `long:"retries" description:"number of retry per query" default:"5"`
 		Timeout  int    `long:"timeout" description:"timeout of a query in ms" default:"5000"`
 		Sampling int    `long:"sample" description:"every how sample print rate message" default:"10000"`
