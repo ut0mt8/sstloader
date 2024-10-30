@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os"
+
 	"github.com/ghostiam/binstruct"
 	"github.com/gocql/gocql"
 	"github.com/pierrec/lz4"
 	"go.uber.org/ratelimit"
-	"os"
 )
 
 var Schema []SchemaEntry
@@ -42,11 +43,10 @@ func New() *SSTable {
 }
 
 func (sst *SSTable) ReadStatistics() error {
-
 	// statistics file
 	file, err := os.Open(sst.StatisticsFile)
 	if err != nil {
-		return fmt.Errorf("open statistics-file: %v\n", err)
+		return fmt.Errorf("open statistics-file: %w", err)
 	}
 
 	// decode statistics info to struct
@@ -54,7 +54,7 @@ func (sst *SSTable) ReadStatistics() error {
 	decoder := binstruct.NewDecoder(file, binary.BigEndian)
 	err = decoder.Decode(&stats)
 	if err != nil {
-		return fmt.Errorf("decode statistics-file: %v\n", err)
+		return fmt.Errorf("decode statistics-file: %w", err)
 	}
 	file.Close()
 
@@ -81,24 +81,23 @@ func (sst *SSTable) ReadStatistics() error {
 }
 
 func (sst *SSTable) ReadData() error {
-
 	// data file
 	dataf, err := os.Open(sst.DataFile)
 	if err != nil {
-		return fmt.Errorf("open data-file: %v\n", err)
+		return fmt.Errorf("open data-file: %w", err)
 	}
 	defer dataf.Close()
 
 	// get file size
 	datafi, err := dataf.Stat()
 	if err != nil {
-		return fmt.Errorf("stat data-file: %v\n", err)
+		return fmt.Errorf("stat data-file: %w", err)
 	}
 
 	// compression file
 	compf, err := os.Open(sst.CompressionFile)
 	if err != nil {
-		return fmt.Errorf("open compression-file: %v\n", err)
+		return fmt.Errorf("open compression-file: %w", err)
 	}
 
 	// decode compression info to struct
@@ -107,7 +106,7 @@ func (sst *SSTable) ReadData() error {
 	decoder := binstruct.NewDecoder(compf, binary.BigEndian)
 	err = decoder.Decode(&cinfo)
 	if err != nil {
-		return fmt.Errorf("decode compression-file: %v\n", err)
+		return fmt.Errorf("decode compression-file: %w", err)
 	}
 	compf.Close()
 
@@ -117,19 +116,18 @@ func (sst *SSTable) ReadData() error {
 
 	// uncompress data chunk by chunk
 	for i := 0; i < int(cinfo.ChunkCount); i++ {
-
 		chunk := DataChunk{}
 		chunk.CompressedLength = cinfo.ChunkSizes[i]
 		decoder := binstruct.NewDecoder(dataf, binary.BigEndian)
 		err = decoder.Decode(&chunk)
 		if err != nil {
-			return fmt.Errorf("decode data-chunk: %v\n", err)
+			return fmt.Errorf("decode data-chunk: %w", err)
 		}
 
 		uncompressedBytes := make([]byte, chunk.UncompressedLength)
 		_, err := lz4.UncompressBlock(chunk.CompressedBytes, uncompressedBytes)
 		if err != nil {
-			return fmt.Errorf("uncompress lz4 data-chunk: %v\n", err)
+			return fmt.Errorf("uncompress lz4 data-chunk: %w", err)
 		}
 
 		sst.data = append(sst.data, uncompressedBytes...)
@@ -139,7 +137,6 @@ func (sst *SSTable) ReadData() error {
 }
 
 func (sst *SSTable) ReadPartitions(ch chan []any) {
-
 	rl := ratelimit.New(sst.Limit)
 	reader := bytes.NewReader(sst.data)
 
@@ -155,7 +152,6 @@ func (sst *SSTable) ReadPartitions(ch chan []any) {
 		}
 
 		for _, r := range partition.Rows {
-
 			var values []any
 			values = append(pvalues, r.ClusteringValue)
 
@@ -169,13 +165,13 @@ func (sst *SSTable) ReadPartitions(ch chan []any) {
 						values = append(values, string(c.Value))
 					}
 				case Int32Size:
-					if GetFlag(c.Flags, HAS_EMPTY_VALUE) {
+					if GetFlag(c.Flags, HasEmptyValue) {
 						values = append(values, &gocql.UnsetValue)
 					} else {
 						values = append(values, Int32(c.Value))
 					}
 				case DoubleSize:
-					if GetFlag(c.Flags, HAS_EMPTY_VALUE) {
+					if GetFlag(c.Flags, HasEmptyValue) {
 						values = append(values, &gocql.UnsetValue)
 					} else {
 						values = append(values, Float64(c.Value))

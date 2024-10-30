@@ -1,6 +1,6 @@
 module sstloader
 
-go 1.22.2
+go 1.23.1
 
 require (
 	github.com/ghostiam/binstruct v1.4.0

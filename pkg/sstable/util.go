@@ -6,8 +6,8 @@ import (
 	"io"
 )
 
-func GetFlag(b byte, n byte) bool {
-	return b&byte(n) > 0
+func GetFlag(b, n byte) bool {
+	return b&n > 0
 }
 
 func ReadOne(r io.Reader) byte {

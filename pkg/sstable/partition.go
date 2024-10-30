@@ -15,7 +15,6 @@ type HeaderKey struct {
 }
 
 func (partition *Partition) Read(r io.Reader, compoundPK bool) {
-
 	if compoundPK {
 		// header key length
 		partition.HeaderKeyLength = ReadUint16(r)
@@ -43,18 +42,17 @@ func (partition *Partition) Read(r io.Reader, compoundPK bool) {
 	partition.HeaderMarkedforDeleteAt = ReadUint64(r)
 
 	for {
-		Row := Row{}
-		Row.Read(r)
+		row := Row{}
+		row.Read(r)
 
-		if GetFlag(Row.Flags, END_OF_PARTITION) {
+		if GetFlag(row.Flags, EndOfPartition) {
 			break
 		}
-		partition.Rows = append(partition.Rows, Row)
+		partition.Rows = append(partition.Rows, row)
 	}
 }
 
 func (hk *HeaderKey) Read(r io.Reader) int {
-
 	length := int(ReadUint16(r))
 	hk.Value = ReadSome(r, length)
 
@@ -62,7 +60,6 @@ func (hk *HeaderKey) Read(r io.Reader) int {
 }
 
 func (hk *HeaderKey) ReadCompound(r io.Reader) int {
-
 	length := int(ReadUint16(r))
 	hk.Value = ReadSome(r, length)
 

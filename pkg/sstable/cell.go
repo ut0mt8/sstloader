@@ -3,11 +3,11 @@ package sstable
 import "io"
 
 const (
-	IS_DELETED        byte = 0x01
-	IS_EXPIRING       byte = 0x02
-	HAS_EMPTY_VALUE   byte = 0x04
-	USE_ROW_TIMESTAMP byte = 0x08
-	USE_ROW_TTL       byte = 0x10
+	IsDeleted       byte = 0x01
+	IsExpiring      byte = 0x02
+	HasEmptyValue   byte = 0x04
+	UseRowTimestamp byte = 0x08
+	UseRowTTL       byte = 0x10
 )
 
 type Cell struct {
@@ -22,36 +22,35 @@ type Cell struct {
 }
 
 func (cell *Cell) Read(r io.Reader) {
-
 	cell.Flags = ReadOne(r)
 
 	// timestamp if any
-	if !GetFlag(cell.Flags, USE_ROW_TIMESTAMP) {
+	if !GetFlag(cell.Flags, UseRowTimestamp) {
 		cell.Timestamp = ReadUvarint(r)
 	}
 
 	// localDeletionTime
 	// only if the cell is deleted or expiring and do not use row ttl
-	if (GetFlag(cell.Flags, IS_DELETED) || GetFlag(cell.Flags, IS_EXPIRING)) && !GetFlag(cell.Flags, USE_ROW_TTL) {
+	if (GetFlag(cell.Flags, IsDeleted) || GetFlag(cell.Flags, IsExpiring)) && !GetFlag(cell.Flags, UseRowTTL) {
 		cell.LocalDeletionTime = ReadUvarint(r)
 	}
 
 	// TTL
 	// only if cell is expiring and do not use row ttl
-	if GetFlag(cell.Flags, IS_EXPIRING) && !GetFlag(cell.Flags, USE_ROW_TTL) {
+	if GetFlag(cell.Flags, IsExpiring) && !GetFlag(cell.Flags, UseRowTTL) {
 		cell.TTL = ReadUvarint(r)
 	}
 
 	// length of value
 	// if we have a value and text type read the following length
-	if !GetFlag(cell.Flags, HAS_EMPTY_VALUE) && cell.TypeSize == 0 {
+	if !GetFlag(cell.Flags, HasEmptyValue) && cell.TypeSize == 0 {
 		cell.Length = ReadUvarint(r)
 	} else {
 		cell.Length = cell.TypeSize
 	}
 
 	// only if we have a value
-	if !GetFlag(cell.Flags, HAS_EMPTY_VALUE) {
+	if !GetFlag(cell.Flags, HasEmptyValue) {
 		cell.Value = ReadSome(r, int(cell.Length))
 	}
 }

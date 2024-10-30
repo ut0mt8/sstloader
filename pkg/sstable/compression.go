@@ -15,7 +15,7 @@ type Option struct {
 }
 
 type CompressionInfo struct {
-	FileSize       int64 `bin:"-"` //helper
+	FileSize       int64 `bin:"-"` // helper
 	CompressorName ShortString
 	OptionsCount   int32
 	Options        []Option `bin:"len:OptionsCount"`
@@ -43,7 +43,7 @@ func (info *CompressionInfo) ReadChunkSizes(r binstruct.Reader) ([]int64, error)
 }
 
 type DataChunk struct {
-	CompressedLength   int64  `bin:"-"` //helper
+	CompressedLength   int64  `bin:"-"` // helper
 	UncompressedLength int32  `bin:"le"`
 	CompressedBytes    []byte `bin:"len:CompressedLength"`
 	CRC                [4]byte

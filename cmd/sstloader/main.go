@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/jessevdk/go-flags"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/jessevdk/go-flags"
 
 	"sstloader/internal/cassandra"
 	"sstloader/pkg/sstable"
 )
 
 func main() {
-
 	var opts struct {
 		DataFile string `short:"d" long:"datafile" description:"sstable data file" required:"true"`
 		Seeds    string `short:"s" long:"seeds" description:"cassandra seeds" required:"true"`
@@ -114,7 +114,6 @@ func main() {
 	// wrap in go routine to handle recover
 	wg.Add(1)
 	go func() {
-
 		defer func() {
 			if r := recover(); r != nil {
 				close(ch)
@@ -123,11 +122,9 @@ func main() {
 		}()
 
 		sst.ReadPartitions(ch)
-
 	}()
 
 	wg.Wait()
 	elapsed := time.Since(start)
 	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d error(s)\n", sst.Queries, elapsed, sst.Queries/int(elapsed.Seconds()), cl.Errors.Load())
-
 }

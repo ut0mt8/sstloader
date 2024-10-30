@@ -2,12 +2,13 @@ package cassandra
 
 import (
 	"fmt"
-	"github.com/gocql/gocql"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"sstloader/pkg/sstable"
+
+	"github.com/gocql/gocql"
 )
 
 type CassandraLoader struct {
@@ -31,7 +32,6 @@ func New() *CassandraLoader {
 }
 
 func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
-
 	var (
 		partition     string
 		clustering    string
@@ -60,7 +60,7 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 
 	session, err := cluster.CreateSession()
 	if err != nil {
-		return fmt.Errorf("create session: %v\n", err)
+		return fmt.Errorf("create session: %w", err)
 	}
 
 	// construct insert query
@@ -96,7 +96,8 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 	columsFill = strings.Trim(columsFill, ",")
 
 	// insert reqyest
-	req = "INSERT INTO " + cl.KS + "." + cl.Table + " (" + partition + clustering + regularColums + ") VALUES (" + columsFill + ") "
+	req = "INSERT INTO " + cl.KS + "." + cl.Table +
+		" (" + partition + clustering + regularColums + ") VALUES (" + columsFill + ")"
 	if cl.Debug {
 		fmt.Printf("(debug) query: %s \n", req)
 	}
