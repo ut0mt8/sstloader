@@ -19,6 +19,6 @@ deps:
 fmt:
 	go fmt ./...
 docker:
-	docker build --build-arg --build-arg VERSION=${VERSION} --build-arg BUILD=${BUILD} -t $(REGISTRY)/$(PROJECT):$(VERSION) .
+	docker build --build-arg VERSION=${VERSION} --build-arg BUILD=${BUILD} -t $(REGISTRY)/$(PROJECT):$(VERSION) .
 	docker push $(REGISTRY)/$(PROJECT):$(VERSION)
 
