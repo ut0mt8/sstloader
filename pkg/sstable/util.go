@@ -57,7 +57,6 @@ func ReadUint64(r io.Reader) uint64 {
 
 func Int32(b []byte) (ret int32) {
 	return int32(binary.BigEndian.Uint32(b))
-	return ret
 }
 
 func Float64(b []byte) (ret float64) {
