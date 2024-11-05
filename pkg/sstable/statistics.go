@@ -48,7 +48,7 @@ type Column struct {
 }
 
 func (s *Serialization) ReadUvarint(r binstruct.Reader) (uint64, error) {
-	return ReadUvarint(r), nil
+	return ReadUvarint(r)
 }
 
 func (c *ClusteringKey) GetTypeSize(r binstruct.Reader) (uint64, error) {

@@ -108,21 +108,10 @@ func main() {
 		}()
 	}
 
-	// main reading worker
+	// main reading lopp
 	start := time.Now()
-
-	// wrap in go routine to handle recover
-	wg.Add(1)
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				close(ch)
-				wg.Done()
-			}
-		}()
-
-		sst.ReadPartitions(ch)
-	}()
+	sst.ReadPartitions(ch)
+	close(ch)
 
 	wg.Wait()
 	elapsed := time.Since(start)

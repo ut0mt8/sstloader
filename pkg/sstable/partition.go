@@ -14,57 +14,96 @@ type HeaderKey struct {
 	Value []byte // Length size
 }
 
-func (partition *Partition) Read(r io.Reader, compoundPK bool) {
+func (partition *Partition) Read(r io.Reader, compoundPK bool) (err error) {
 	if compoundPK {
 		// header key length
-		partition.HeaderKeyLength = ReadUint16(r)
+		partition.HeaderKeyLength, err = ReadUint16(r)
+		if err != nil {
+			return err
+		}
 
 		// header keys
-		read := 0
+		hkl := 0
 		for {
 			hk := HeaderKey{}
-			read += hk.ReadCompound(r)
+			read, err := hk.ReadCompound(r)
+			if err != nil {
+				return err
+			}
+			hkl = hkl + read
 			partition.HeaderKeys = append(partition.HeaderKeys, hk)
-			if read >= int(partition.HeaderKeyLength) {
+			if hkl >= int(partition.HeaderKeyLength) {
 				break
 			}
 		}
 	} else {
 		partition.HeaderKeyLength = 1
 		hk := HeaderKey{}
-		hk.Read(r)
+		_, err = hk.Read(r)
+		if err != nil {
+			return err
+		}
 		partition.HeaderKeys = append(partition.HeaderKeys, hk)
 	}
+
 	// header local deletion time
-	partition.HeaderLocalDeletiontime = ReadUint32(r)
+	partition.HeaderLocalDeletiontime, err = ReadUint32(r)
+	if err != nil {
+		return err
+	}
 
 	// header marked for detele at
-	partition.HeaderMarkedforDeleteAt = ReadUint64(r)
+	partition.HeaderMarkedforDeleteAt, err = ReadUint64(r)
+	if err != nil {
+		return err
+	}
 
 	for {
 		row := Row{}
-		row.Read(r)
+		err = row.Read(r)
+		if err != nil {
+			return err
+		}
 
 		if GetFlag(row.Flags, EndOfPartition) {
 			break
 		}
 		partition.Rows = append(partition.Rows, row)
 	}
+
+	return nil
 }
 
-func (hk *HeaderKey) Read(r io.Reader) int {
-	length := int(ReadUint16(r))
-	hk.Value = ReadSome(r, length)
+func (hk *HeaderKey) Read(r io.Reader) (int, error) {
+	length, err := ReadUint16(r)
+	if err != nil {
+		return 0, err
+	}
 
-	return length + 2
+	hk.Value, err = ReadSome(r, int(length))
+	if err != nil {
+		return 0, err
+	}
+
+	return int(length) + 2, nil
 }
 
-func (hk *HeaderKey) ReadCompound(r io.Reader) int {
-	length := int(ReadUint16(r))
-	hk.Value = ReadSome(r, length)
+func (hk *HeaderKey) ReadCompound(r io.Reader) (int, error) {
+	length, err := ReadUint16(r)
+	if err != nil {
+		return 0, err
+	}
+
+	hk.Value, err = ReadSome(r, int(length))
+	if err != nil {
+		return 0, err
+	}
 
 	// last 00
-	ReadOne(r)
+	_, err = ReadOne(r)
+	if err != nil {
+		return 0, err
+	}
 
-	return length + 3
+	return int(length) + 3, nil
 }

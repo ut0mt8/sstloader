@@ -30,67 +30,108 @@ type Row struct {
 	Cells             []Cell // optional length determined by schema
 }
 
-func (row *Row) Read(r io.Reader) {
+func (row *Row) Read(r io.Reader) (err error) {
 	// flags
-	row.Flags = ReadOne(r)
+	row.Flags, err = ReadOne(r)
+	if err != nil {
+		return err
+	}
 
 	// extentedFlags if any
 	if GetFlag(row.Flags, ExtensionFlag) {
-		row.ExtentedFlags = ReadOne(r)
+		row.ExtentedFlags, err = ReadOne(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// end of partition? we're done
 	if GetFlag(row.Flags, EndOfPartition) {
-		return
+		return nil
 	}
 
 	// clusteringBlock if we have not static row FIXME: need to really check extented flag
 	if !GetFlag(row.Flags, ExtensionFlag) {
-		row.ClusteringHeader = ReadUvarint(r)
-		row.ClusteringLength = ReadUvarint(r)
-		row.ClusteringValue = ReadSome(r, int(row.ClusteringLength))
+		row.ClusteringHeader, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
+
+		row.ClusteringLength, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
+
+		row.ClusteringValue, err = ReadSome(r, int(row.ClusteringLength))
+		if err != nil {
+			return err
+		}
 	}
 
 	// body size
-	row.BodySize = ReadUvarint(r)
+	row.BodySize, err = ReadUvarint(r)
+	if err != nil {
+		return err
+	}
 
 	// previous size
-	row.PreviousSize = ReadUvarint(r)
+	row.PreviousSize, err = ReadUvarint(r)
+	if err != nil {
+		return err
+	}
 
 	// timestamp if any
 	if GetFlag(row.Flags, HasTimestamp) {
-		row.Timestamp = ReadUvarint(r)
+		row.Timestamp, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// ttl if any
 	if GetFlag(row.Flags, HasTTL) {
-		row.TTL = ReadUvarint(r)
+		row.TTL, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// deletionTime if row is deleted or expiring
 	if GetFlag(row.Flags, HasDeletion) || GetFlag(row.Flags, HasTTL) {
-		row.DeletionTime = ReadUvarint(r)
+		row.DeletionTime, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// deletionTimeStamp if row is deleted
 	if GetFlag(row.Flags, HasDeletion) {
-		row.DeletionTimestamp = ReadUvarint(r)
+		row.DeletionTimestamp, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// localDeletionTime if row is deleted
 	if GetFlag(row.Flags, HasDeletion) {
-		row.LocalDeletionTime = ReadUvarint(r)
+		row.LocalDeletionTime, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// missing columns if we don't have all colums
 	if !GetFlag(row.Flags, HasAllColumns) {
-		row.MissingColumns = ReadUvarint(r)
+		row.MissingColumns, err = ReadUvarint(r)
+		if err != nil {
+			return err
+		}
 	}
 
 	// if we have all colums get the numbers of cell from schema
 	// otherwise determine it from MissingColums field TODO
 	if !GetFlag(row.Flags, HasAllColumns) {
-		return
+		return nil
 	}
 
 	// cells
@@ -101,7 +142,14 @@ func (row *Row) Read(r io.Reader) {
 		cell := Cell{
 			TypeSize: Schema[i].Size,
 		}
-		cell.Read(r)
+
+		err = cell.Read(r)
+		if err != nil {
+			return err
+		}
+
 		row.Cells[i] = cell
 	}
+
+	return nil
 }

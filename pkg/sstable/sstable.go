@@ -38,7 +38,6 @@ type SSTable struct {
 }
 
 func New() *SSTable {
-	// TODO init with default
 	return &SSTable{}
 }
 
@@ -140,10 +139,13 @@ func (sst *SSTable) ReadPartitions(ch chan []any) {
 	rl := ratelimit.New(sst.Limit)
 	reader := bytes.NewReader(sst.data)
 
-	// loop over partition / FIXME panic at EOF
+	// loop over partition
 	for {
 		partition := Partition{}
-		partition.Read(reader, sst.Compound)
+		err := partition.Read(reader, sst.Compound)
+		if err != nil {
+			break // we should have reach eof
+		}
 
 		var pvalues []any
 

@@ -6,7 +6,7 @@ import (
 	"math/bits"
 )
 
-func ReadUvarint(r io.Reader) uint64 {
+func ReadUvarint(r io.Reader) (uint64, error) {
 	// 8 bytes container
 	var number [8]byte
 
@@ -14,14 +14,14 @@ func ReadUvarint(r io.Reader) uint64 {
 	var buf [1]byte
 	n, err := r.Read(buf[:])
 	if err != nil || n != 1 {
-		panic("read error")
+		return 0, err
 	}
 	firstByte := buf[0]
 
 	// 1 byte encoding for small numbers
 	// 127 = 01111111
 	if firstByte <= 127 {
-		return uint64(firstByte)
+		return uint64(firstByte), nil
 	}
 
 	// number of leading bits set to 1
@@ -38,10 +38,10 @@ func ReadUvarint(r io.Reader) uint64 {
 	for i := pos; i < 8; i++ {
 		n, err := r.Read(buf[:])
 		if err != nil || n != 1 {
-			panic("read error")
+			return 0, err
 		}
 		number[i] = buf[0]
 	}
 
-	return binary.BigEndian.Uint64(number[:])
+	return binary.BigEndian.Uint64(number[:]), nil
 }
