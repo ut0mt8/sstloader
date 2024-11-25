@@ -19,7 +19,7 @@ func main() {
 		Seeds    string `short:"s" long:"seeds" description:"cassandra seeds" required:"true"`
 		KS       string `short:"k" long:"keyspace" description:"cassandra keyspace" required:"true"`
 		Table    string `short:"t" long:"table" description:"cassandra table" required:"true"`
-		DC       string `short:"r" long:"datacenter" description:"cassandra datacenter" required:"true"`
+		DC       string `short:"r" long:"datacenter" description:"cassandra datacenter" default:""`
 		Username string `short:"u" long:"username" description:"cassandra username" default:"cassandra"`
 		Password string `short:"p" long:"password" description:"cassandra password" default:"cassandra"`
 		Workers  int    `short:"w" long:"workers" description:"workers numbers" default:"100"`
@@ -31,6 +31,7 @@ func main() {
 		Retries  int    `long:"retries" description:"number of retry per query" default:"5"`
 		Timeout  int    `long:"timeout" description:"timeout of a query in ms" default:"5000"`
 		Sampling int    `long:"sample" description:"every how sample print rate message" default:"10000"`
+		Compress bool   `long:"compress" description:"compress cql queries"`
 		Debug    bool   `long:"debug" description:"print debugging messages"`
 	}
 
@@ -75,6 +76,7 @@ func main() {
 	cl.Timeout = opts.Timeout
 	cl.Retries = opts.Retries
 	cl.Conns = opts.Conns
+	cl.Compress = opts.Compress
 	if opts.Debug {
 		cl.Debug = true
 	}

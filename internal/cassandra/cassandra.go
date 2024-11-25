@@ -12,6 +12,7 @@ import (
 )
 
 type CassandraLoader struct {
+	Compress bool
 	Debug    bool
 	Seeds    string
 	KS       string
@@ -51,7 +52,14 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 	cluster.WriteTimeout = time.Duration(cl.Timeout) * time.Millisecond
 	cluster.NumConns = cl.Conns // theoricitally handled by the scylla driver
 	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: cl.Retries}
-	cluster.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(gocql.DCAwareRoundRobinPolicy(cl.DC))
+	if cl.DC != "" {
+		cluster.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(gocql.DCAwareRoundRobinPolicy(cl.DC))
+	} else {
+		cluster.PoolConfig.HostSelectionPolicy = gocql.TokenAwareHostPolicy(gocql.RoundRobinHostPolicy())
+	}
+	if cl.Compress {
+		cluster.Compressor = &gocql.SnappyCompressor{} // only compressor supported
+	}
 
 	cluster.Authenticator = gocql.PasswordAuthenticator{
 		Username: cl.Username,
