@@ -14,6 +14,7 @@ require (
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/frankban/quicktest v1.14.6 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

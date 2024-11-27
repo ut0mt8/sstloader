@@ -117,5 +117,5 @@ func main() {
 
 	wg.Wait()
 	elapsed := time.Since(start)
-	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d error(s)\n", sst.Queries, elapsed, sst.Queries/int(elapsed.Seconds()), cl.Errors.Load())
+	fmt.Printf("%d rows inserted in %s. (%d rows/s). %d failed\n", sst.Queries, elapsed, sst.Queries/int(elapsed.Seconds()), cl.Errors.Load())
 }
