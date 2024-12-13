@@ -25,7 +25,8 @@ type CassandraLoader struct {
 	Password string
 	Errors   atomic.Uint64
 
-	query *gocql.Query
+	request string
+	session *gocql.Session
 }
 
 func New() *CassandraLoader {
@@ -71,12 +72,15 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 		return fmt.Errorf("create session: %w", err)
 	}
 
+	// session is goroutine safe
+	cl.session = session
+
 	// construct insert query
 
 	// get partition and clustering key
 	// TODO only text supported
 	req := "SELECT column_name, kind FROM system_schema.columns where keyspace_name = '%s' and table_name = '%s'"
-	iter := session.Query(fmt.Sprintf(req, cl.KS, cl.Table)).Consistency(gocql.LocalQuorum).Iter()
+	iter := cl.session.Query(fmt.Sprintf(req, cl.KS, cl.Table)).Consistency(gocql.LocalQuorum).Iter()
 
 	for iter.Scan(&cname, &kind) {
 		if kind == "partition_key" {
@@ -104,19 +108,17 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 	columsFill = strings.Trim(columsFill, ",")
 
 	// insert reqyest
-	req = "INSERT INTO " + cl.KS + "." + cl.Table +
+	cl.request = "INSERT INTO " + cl.KS + "." + cl.Table +
 		" (" + partition + clustering + regularColums + ") VALUES (" + columsFill + ")"
 	if cl.Debug {
-		fmt.Printf("(debug) query: %s \n", req)
+		fmt.Printf("(debug) query: %s \n", cl.request)
 	}
-
-	cl.query = session.Query(req)
 
 	return nil
 }
 
 func (cl *CassandraLoader) Load(v []any) {
-	err := cl.query.Bind(v...).Exec()
+	err := cl.session.Query(cl.request).Bind(v...).Exec()
 	if err != nil {
 		cl.Errors.Add(1)
 		if cl.Debug {
