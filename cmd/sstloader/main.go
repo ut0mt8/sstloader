@@ -27,10 +27,9 @@ func main() {
 		Limit    int    `short:"l" long:"ratelimit" description:"rate limit insert per second" default:"10000"`
 		Conns    int    `long:"connections" description:"number of connections by host" default:"20"`
 		Dry      bool   `long:"dryrun" description:"only decode sstable"`
-		CSV      bool   `long:"printcsv" description:"print CSV to stdout"`
 		Retries  int    `long:"retries" description:"number of retry per query" default:"5"`
 		Timeout  int    `long:"timeout" description:"timeout of a query in ms" default:"5000"`
-		Sampling int    `long:"sample" description:"every how sample print rate message" default:"10000"`
+		Sampling int    `long:"sample" description:"every how many qyeries print message rate" default:"10000"`
 		Compress bool   `long:"compress" description:"compress cql queries"`
 		Debug    bool   `long:"debug" description:"print debugging messages"`
 	}
