@@ -120,7 +120,7 @@ func (row *Row) Read(r io.Reader) (err error) {
 		}
 	}
 
-	// missing columns if we don't have all colums
+	// missing columns if we don't have all columns
 	if !GetFlag(row.Flags, HasAllColumns) {
 		row.MissingColumns, err = ReadUvarint(r)
 		if err != nil {
@@ -128,8 +128,8 @@ func (row *Row) Read(r io.Reader) (err error) {
 		}
 	}
 
-	// if we have all colums get the numbers of cell from schema
-	// otherwise determine it from MissingColums field TODO
+	// if we have all columns get the numbers of cell from schema
+	// otherwise determine it from MissingColumns field TODO
 	if !GetFlag(row.Flags, HasAllColumns) {
 		return nil
 	}

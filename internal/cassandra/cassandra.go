@@ -35,13 +35,13 @@ func New() *CassandraLoader {
 
 func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 	var (
-		partition     string
-		clustering    string
-		cname         string
-		kind          string
-		regularColums string
-		columsFill    string
-		pkNumber      int
+		partition      string
+		clustering     string
+		cname          string
+		kind           string
+		regularColumns string
+		columnsFill    string
+		pkNumber       int
 	)
 
 	// cassandra init
@@ -85,11 +85,11 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 	for iter.Scan(&cname, &kind) {
 		if kind == "partition_key" {
 			partition = partition + cname + ","
-			columsFill = columsFill + "?,"
+			columnsFill = columnsFill + "?,"
 			pkNumber++
 		} else if kind == "clustering" {
 			clustering = clustering + cname + ","
-			columsFill = columsFill + "?,"
+			columnsFill = columnsFill + "?,"
 		}
 	}
 
@@ -100,16 +100,16 @@ func (cl *CassandraLoader) Prepare(sst *sstable.SSTable) error {
 
 	// get columns from schemas (sst side)
 	for i := 0; i < len(sstable.Schema); i++ {
-		regularColums = regularColums + sstable.Schema[i].Name + ","
-		columsFill = columsFill + "?,"
+		regularColumns = regularColumns + sstable.Schema[i].Name + ","
+		columnsFill = columnsFill + "?,"
 	}
 
-	regularColums = strings.Trim(regularColums, ",")
-	columsFill = strings.Trim(columsFill, ",")
+	regularColumns = strings.Trim(regularColumns, ",")
+	columnsFill = strings.Trim(columnsFill, ",")
 
 	// insert reqyest
 	cl.request = "INSERT INTO " + cl.KS + "." + cl.Table +
-		" (" + partition + clustering + regularColums + ") VALUES (" + columsFill + ")"
+		" (" + partition + clustering + regularColumns + ") VALUES (" + columnsFill + ")"
 	if cl.Debug {
 		fmt.Printf("(debug) query: %s \n", cl.request)
 	}
